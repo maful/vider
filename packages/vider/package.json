@@ -1,6 +1,6 @@
 {
   "name": "vider",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "description": "Find and delete node_modules directories to free up disk space.",
   "license": "MIT",
   "repository": "github:maful/vider",
