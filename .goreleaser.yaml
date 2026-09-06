@@ -1,5 +1,4 @@
 version: 2
-
 project_name: vider
 
 builds:
@@ -18,6 +17,8 @@ builds:
         goarch: arm64
     ldflags:
       - -s -w
+      # inject version at build time
+      - -X main.version={{.Version}}
 
 # Raw binaries instead of archives, named so scripts/pack-platform.mjs can
 # wrap each one into an @vider/<os>-<arch> npm package.
@@ -28,6 +29,8 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
-# release-please owns the changelog and release notes.
 changelog:
+  disable: true
+
+release:
   disable: true
