@@ -137,3 +137,5 @@ jobs:
             npm publish "$dir" --access public --provenance
           done
           npm publish packages/vider --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
