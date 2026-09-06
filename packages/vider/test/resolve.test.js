@@ -21,11 +21,11 @@ const hasExpect = await run("expect", ["-v"])
 
 describe("platformPackageName", () => {
   it("maps every supported platform", () => {
-    expect(platformPackageName("darwin", "arm64")).toBe("@vider/darwin-arm64");
-    expect(platformPackageName("darwin", "x64")).toBe("@vider/darwin-x64");
-    expect(platformPackageName("linux", "arm64")).toBe("@vider/linux-arm64");
-    expect(platformPackageName("linux", "x64")).toBe("@vider/linux-x64");
-    expect(platformPackageName("win32", "x64")).toBe("@vider/win32-x64");
+    expect(platformPackageName("darwin", "arm64")).toBe("@vider-app/darwin-arm64");
+    expect(platformPackageName("darwin", "x64")).toBe("@vider-app/darwin-x64");
+    expect(platformPackageName("linux", "arm64")).toBe("@vider-app/linux-arm64");
+    expect(platformPackageName("linux", "x64")).toBe("@vider-app/linux-x64");
+    expect(platformPackageName("win32", "x64")).toBe("@vider-app/win32-x64");
   });
 
   it("returns null for unsupported platforms", () => {
@@ -55,7 +55,7 @@ describe("resolveBinary", () => {
       arch: "x64",
       env: {},
       load: (name) => {
-        expect(name).toBe("@vider/linux-x64");
+        expect(name).toBe("@vider-app/linux-x64");
         return "/pkg/bin/vider";
       },
     });
@@ -93,7 +93,7 @@ describe("resolveBinary", () => {
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(ViderError);
-      expect(err.message).toContain("@vider/linux-x64");
+      expect(err.message).toContain("@vider-app/linux-x64");
     }
   });
 });

@@ -27,7 +27,7 @@ const npmCpu = arch === "amd64" ? "x64" : arch;
 const name = `${npmOs}-${npmCpu}`;
 const binName = os === "windows" ? "vider.exe" : "vider";
 
-const dir = path.join(out, "@vider", name);
+const dir = path.join(out, "@vider-app", name);
 await mkdir(dir, { recursive: true });
 await copyFile(bin, path.join(dir, binName));
 await writeFile(
@@ -36,7 +36,7 @@ await writeFile(
 );
 
 const manifest = {
-  name: `@vider/${name}`,
+  name: `@vider-app/${name}`,
   version,
   description: `Prebuilt vider engine for ${name}. Do not install directly; install vider instead.`,
   license: "MIT",

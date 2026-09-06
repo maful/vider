@@ -1,0 +1,33 @@
+version: 2
+
+project_name: vider
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # npm matrix ships win32-x64 only
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+
+# Raw binaries instead of archives, named so scripts/pack-platform.mjs can
+# wrap each one into an @vider/<os>-<arch> npm package.
+archives:
+  - formats: [binary]
+    name_template: "vider_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+# release-please owns the changelog and release notes.
+changelog:
+  disable: true

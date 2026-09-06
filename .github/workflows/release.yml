@@ -1,0 +1,134 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: rp
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Run Go tests
+        run: go test ./...
+
+      - name: Build and upload binaries to the release
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  smoke:
+    needs: [release-please, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: vider_linux_amd64
+          - os: ubuntu-24.04-arm
+            asset: vider_linux_arm64
+          - os: macos-latest
+            asset: vider_darwin_arm64
+          - os: windows-latest
+            asset: vider_windows_amd64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Download the native binary from the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "${{ matrix.asset }}"
+
+      - name: Bad root must exit 1 with the Go error
+        shell: bash
+        run: |
+          set -uo pipefail
+          chmod +x "${{ matrix.asset }}"
+          out="$(./"${{ matrix.asset }}" /nonexistent-vider-root-$$ 2>&1)"
+          code=$?
+          echo "$out"
+          test "$code" -eq 1
+          echo "$out" | grep -q "root not accessible"
+
+  publish:
+    needs: [release-please, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the tag matches packages/vider's version
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          tag_version="${TAG#v}"
+          pkg_version="$(node -p "require('./packages/vider/package.json').version")"
+          test "$tag_version" = "$pkg_version" || {
+            echo "tag v$tag_version does not match packages/vider version $pkg_version"
+            exit 1
+          }
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Download the built binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "vider_*" --dir dist
+
+      - name: Pack npm platform packages
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          node scripts/pack-platform.mjs --os darwin  --arch arm64 --version "$version" --bin dist/vider_darwin_arm64      --out npm-dist
+          node scripts/pack-platform.mjs --os darwin  --arch amd64 --version "$version" --bin dist/vider_darwin_amd64     --out npm-dist
+          node scripts/pack-platform.mjs --os linux   --arch arm64 --version "$version" --bin dist/vider_linux_arm64      --out npm-dist
+          node scripts/pack-platform.mjs --os linux   --arch amd64 --version "$version" --bin dist/vider_linux_amd64     --out npm-dist
+          node scripts/pack-platform.mjs --os windows --arch amd64 --version "$version" --bin dist/vider_windows_amd64.exe --out npm-dist
+
+      - name: Publish platform packages, then the main package
+        run: |
+          set -euo pipefail
+          for dir in npm-dist/@vider-app/*/; do
+            npm publish "$dir" --access public --provenance
+          done
+          npm publish packages/vider --access public --provenance

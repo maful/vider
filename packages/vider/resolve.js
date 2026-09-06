@@ -3,11 +3,11 @@
 // Maps "<platform>-<arch>" to the npm package that carries the prebuilt Go
 // binary for it. Kept in one place so tests can drive every branch.
 const PLATFORM_PACKAGES = {
-  "darwin-arm64": "@vider/darwin-arm64",
-  "darwin-x64": "@vider/darwin-x64",
-  "linux-arm64": "@vider/linux-arm64",
-  "linux-x64": "@vider/linux-x64",
-  "win32-x64": "@vider/win32-x64",
+  "darwin-arm64": "@vider-app/darwin-arm64",
+  "darwin-x64": "@vider-app/darwin-x64",
+  "linux-arm64": "@vider-app/linux-arm64",
+  "linux-x64": "@vider-app/linux-x64",
+  "win32-x64": "@vider-app/win32-x64",
 };
 
 class ViderError extends Error {
