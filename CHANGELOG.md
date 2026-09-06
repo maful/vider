@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/maful/vider/compare/v0.1.0...v0.1.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* release ([8cdf4c2](https://github.com/maful/vider/commit/8cdf4c252689eaabd46311263dfb41188a58746e))
+
 ## 0.1.0 (2026-09-06)
 
 
