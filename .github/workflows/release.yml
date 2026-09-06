@@ -125,6 +125,11 @@ jobs:
           node scripts/pack-platform.mjs --os linux   --arch amd64 --version "$version" --bin dist/vider_linux_amd64     --out npm-dist
           node scripts/pack-platform.mjs --os windows --arch amd64 --version "$version" --bin dist/vider_windows_amd64.exe --out npm-dist
 
+      - name: Sync platform dependency pins to the release version
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: node scripts/sync-pins.mjs "${TAG#v}" packages/vider/package.json
+
       - name: Publish platform packages, then the main package
         run: |
           set -euo pipefail

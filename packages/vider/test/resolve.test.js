@@ -99,16 +99,18 @@ describe("resolveBinary", () => {
 });
 
 describe("package manifest", () => {
-  it("pins every platform package to the same version", () => {
+  it("covers the full platform matrix and pins all engines to one version", () => {
     const pkg = JSON.parse(
       readFileSync(path.join(here, "..", "package.json"), "utf8")
     );
-    expect(Object.keys(pkg.optionalDependencies)).toHaveLength(
-      Object.keys(PLATFORM_PACKAGES).length
+    const expected = Object.values(PLATFORM_PACKAGES);
+    expect(Object.keys(pkg.optionalDependencies).sort()).toEqual(
+      [...expected].sort()
     );
+    // The publish job rewrites the pins to the release tag version
+    // (scripts/sync-pins.mjs); in the repo they only have to agree.
     const versions = new Set(Object.values(pkg.optionalDependencies));
     expect(versions.size).toBe(1);
-    expect(versions.has(pkg.version)).toBe(true);
   });
 });
 

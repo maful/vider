@@ -8,31 +8,6 @@
           "type": "json",
           "path": "packages/vider/package.json",
           "jsonpath": "$.version"
-        },
-        {
-          "type": "json",
-          "path": "packages/vider/package.json",
-          "jsonpath": "$.optionalDependencies['@vider/darwin-arm64']"
-        },
-        {
-          "type": "json",
-          "path": "packages/vider/package.json",
-          "jsonpath": "$.optionalDependencies['@vider/darwin-x64']"
-        },
-        {
-          "type": "json",
-          "path": "packages/vider/package.json",
-          "jsonpath": "$.optionalDependencies['@vider/linux-arm64']"
-        },
-        {
-          "type": "json",
-          "path": "packages/vider/package.json",
-          "jsonpath": "$.optionalDependencies['@vider/linux-x64']"
-        },
-        {
-          "type": "json",
-          "path": "packages/vider/package.json",
-          "jsonpath": "$.optionalDependencies['@vider/win32-x64']"
         }
       ]
     }
