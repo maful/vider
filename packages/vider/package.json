@@ -1,0 +1,31 @@
+{
+  "name": "vider",
+  "version": "0.1.0",
+  "description": "Find and delete node_modules directories to free up disk space.",
+  "license": "MIT",
+  "repository": "github:maful/vider",
+  "bin": {
+    "vider": "bin.js"
+  },
+  "files": [
+    "bin.js",
+    "resolve.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "optionalDependencies": {
+    "@vider/darwin-arm64": "0.1.0",
+    "@vider/darwin-x64": "0.1.0",
+    "@vider/linux-arm64": "0.1.0",
+    "@vider/linux-x64": "0.1.0",
+    "@vider/win32-x64": "0.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.7"
+  }
+}

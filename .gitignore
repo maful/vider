@@ -1,4 +1,4 @@
-vider
+/vider
 *.exe
 *.exe~
 *.dll
@@ -7,3 +7,7 @@ vider
 *.test
 *.out
 go.work
+node_modules/
+packages/vider/*.tgz
+dist/
+dist-bin/
