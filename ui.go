@@ -252,7 +252,7 @@ func (m model) View() string {
 		}
 	}
 
-	b.WriteString(titleStyle.Render("🗑  nkill — node_modules killer"))
+	b.WriteString(titleStyle.Render("🗑  vider — node_modules killer"))
 	b.WriteString("\n")
 
 	if !m.scanDone {

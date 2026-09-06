@@ -13,7 +13,7 @@ func rootsFromArgs(args []string) ([]string, string) {
 	if len(args) > 0 {
 		return args, strings.Join(args, ", ")
 	}
-	if env := os.Getenv("NKILL_ROOTS"); env != "" {
+	if env := os.Getenv("VIDER_ROOTS"); env != "" {
 		return strings.Split(env, string(os.PathListSeparator)), env
 	}
 	return defaultRoots()

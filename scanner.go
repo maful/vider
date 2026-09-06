@@ -48,7 +48,7 @@ func newScanner(roots []string) *scanner {
 
 func workers() int {
 	n := 32
-	if v := os.Getenv("NKILL_WORKERS"); v != "" {
+	if v := os.Getenv("VIDER_WORKERS"); v != "" {
 		if _, err := fmt.Sscanf(v, "%d", &n); err != nil || n < 1 {
 			n = 32
 		}
