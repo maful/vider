@@ -4,11 +4,36 @@
   "packages": {
     ".": {
       "initial-version": "0.1.0",
+      "release-type": "go"
+    },
+    "packages/vider": {
+      "initial-version": "0.1.0",
+      "release-type": "node",
       "extra-files": [
         {
           "type": "json",
-          "path": "packages/vider/package.json",
-          "jsonpath": "$.version"
+          "path": "package.json",
+          "jsonpath": "$.optionalDependencies['@vider-app/darwin-arm64']"
+        },
+        {
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.optionalDependencies['@vider-app/darwin-x64']"
+        },
+        {
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.optionalDependencies['@vider-app/linux-arm64']"
+        },
+        {
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.optionalDependencies['@vider-app/linux-x64']"
+        },
+        {
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.optionalDependencies['@vider-app/win32-x64']"
         }
       ]
     }

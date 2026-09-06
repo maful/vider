@@ -11,3 +11,4 @@ node_modules/
 packages/vider/*.tgz
 dist/
 dist-bin/
+npm-dist/
