@@ -128,6 +128,7 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       - name: Download the built binaries
         env:
@@ -159,12 +160,10 @@ jobs:
               echo "$name@$version is already published"
               return
             fi
-            npm publish "./$dir" --access public --provenance
+            npm stage publish "./$dir" --access public --provenance
           }
 
           for dir in npm-dist/@vider-app/*/; do
             publish_if_missing "$dir"
           done
           publish_if_missing npm-dist/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
