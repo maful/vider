@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/maful/vider/compare/v0.1.1...v0.1.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* publish CLI under the vider-app scope ([c843f10](https://github.com/maful/vider/commit/c843f10c0be4ac3e238db342fa321346aafc58e2))
+
 ## [0.1.1](https://github.com/maful/vider/compare/v0.1.0...v0.1.1) (2026-09-08)
 
 
