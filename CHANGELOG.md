@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/maful/vider/compare/v0.1.2...v0.1.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* use trusted publishing method ([187791f](https://github.com/maful/vider/commit/187791f04128c589888544e0a1f3cf4117c89935))
+
 ## [0.1.2](https://github.com/maful/vider/compare/v0.1.1...v0.1.2) (2026-09-08)
 
 
