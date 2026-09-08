@@ -21,7 +21,7 @@ builds:
       - -X main.version={{.Version}}
 
 # Raw binaries instead of archives, named so scripts/pack-platform.mjs can
-# wrap each one into an @vider/<os>-<arch> npm package.
+# wrap each one into an @vider-app/<os>-<arch> npm package.
 archives:
   - formats: [binary]
     name_template: "vider_{{ .Os }}_{{ .Arch }}"
@@ -30,7 +30,4 @@ checksum:
   name_template: "checksums.txt"
 
 changelog:
-  disable: true
-
-release:
   disable: true

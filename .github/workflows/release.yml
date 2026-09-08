@@ -14,9 +14,9 @@ jobs:
       contents: write
       pull-requests: write
     outputs:
-      # Root (Go) package
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
+      version: ${{ steps.rp.outputs.version }}
     steps:
       - uses: googleapis/release-please-action@v5
         id: rp
@@ -41,8 +41,20 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/vider/package-lock.json
+
       - name: Run Go tests
         run: go test ./...
+
+      - name: Run Node tests
+        working-directory: packages/vider
+        run: |
+          npm ci
+          npm test
 
       - name: Build and upload binaries to the release
         uses: goreleaser/goreleaser-action@v7
@@ -52,6 +64,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Do not let another tag on the commit change the build version.
+          GORELEASER_CURRENT_TAG: ${{ needs.release-please.outputs.tag_name }}
 
   smoke:
     needs: [release-please, build]
@@ -100,14 +114,13 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
-      - name: Check the tag matches packages/vider's version
+      - name: Check the release version
         env:
           TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
         run: |
-          tag_version="${TAG#v}"
-          pkg_version="$(node -p "require('./packages/vider/package.json').version")"
-          test "$tag_version" = "$pkg_version" || {
-            echo "tag v$tag_version does not match packages/vider version $pkg_version"
+          test "$TAG" = "v$VERSION" || {
+            echo "tag $TAG does not match release version $VERSION"
             exit 1
           }
 
@@ -122,24 +135,36 @@ jobs:
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "vider_*" --dir dist
 
-      - name: Pack npm platform packages
+      - name: Generate npm packages
         env:
-          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: node scripts/pack-npm.mjs --version "$VERSION" --bin-dir dist --out npm-dist
+
+      - name: Validate npm packages
         run: |
           set -euo pipefail
-          version="${TAG#v}"
-          node scripts/pack-platform.mjs --os darwin  --arch arm64 --version "$version" --bin dist/vider_darwin_arm64      --out npm-dist
-          node scripts/pack-platform.mjs --os darwin  --arch amd64 --version "$version" --bin dist/vider_darwin_amd64     --out npm-dist
-          node scripts/pack-platform.mjs --os linux   --arch arm64 --version "$version" --bin dist/vider_linux_arm64      --out npm-dist
-          node scripts/pack-platform.mjs --os linux   --arch amd64 --version "$version" --bin dist/vider_linux_amd64     --out npm-dist
-          node scripts/pack-platform.mjs --os windows --arch amd64 --version "$version" --bin dist/vider_windows_amd64.exe --out npm-dist
+          for dir in npm-dist/@vider-app/*/ npm-dist/vider/; do
+            npm pack "$dir" --dry-run
+          done
 
       - name: Publish platform packages, then the main package
         run: |
           set -euo pipefail
-          for dir in npm-dist/@vider-app/*/; do
+
+          publish_if_missing() {
+            dir="$1"
+            name="$(node -p "require('./$dir/package.json').name")"
+            version="$(node -p "require('./$dir/package.json').version")"
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published"
+              return
+            fi
             npm publish "$dir" --access public --provenance
+          }
+
+          for dir in npm-dist/@vider-app/*/; do
+            publish_if_missing "$dir"
           done
-          npm publish packages/vider --access public --provenance
+          publish_if_missing npm-dist/vider
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

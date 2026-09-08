@@ -1,6 +1,15 @@
 import { readFileSync } from "node:fs";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -13,6 +22,7 @@ import {
 
 const run = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(here, "..", "..", "..");
 // expect wraps commands in a pty for the end-to-end test (macOS `script`
 // rejects piped stdin, so it cannot be used there).
 const hasExpect = await run("expect", ["-v"])
@@ -99,18 +109,91 @@ describe("resolveBinary", () => {
 });
 
 describe("package manifest", () => {
-  it("covers the full platform matrix and pins all engines to one version", () => {
+  it("is private and contains development dependencies only", () => {
     const pkg = JSON.parse(
       readFileSync(path.join(here, "..", "package.json"), "utf8")
     );
-    const expected = Object.values(PLATFORM_PACKAGES);
-    expect(Object.keys(pkg.optionalDependencies).sort()).toEqual(
-      [...expected].sort()
-    );
-    // The publish job rewrites the pins to the release tag version
-    // (scripts/sync-pins.mjs); in the repo they only have to agree.
-    const versions = new Set(Object.values(pkg.optionalDependencies));
-    expect(versions.size).toBe(1);
+    expect(pkg.name).toBe("vider-dev");
+    expect(pkg.private).toBe(true);
+    expect(pkg.optionalDependencies).toBeUndefined();
+  });
+});
+
+describe("generated npm packages", () => {
+  it("uses one release version for the main and platform packages", async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), "vider-npm-test-"));
+    const binDir = path.join(tmp, "bin");
+    const out = path.join(tmp, "out");
+    const assets = [
+      "vider_darwin_arm64",
+      "vider_darwin_amd64",
+      "vider_linux_arm64",
+      "vider_linux_amd64",
+      "vider_windows_amd64.exe",
+    ];
+
+    try {
+      await mkdir(binDir);
+      await Promise.all(
+        assets.map((asset) => writeFile(path.join(binDir, asset), "test binary"))
+      );
+      await run(
+        process.execPath,
+        [
+          path.join(repoRoot, "scripts", "pack-npm.mjs"),
+          "--version",
+          "1.2.3",
+          "--bin-dir",
+          binDir,
+          "--out",
+          out,
+        ],
+        { cwd: repoRoot }
+      );
+
+      const mainDir = path.join(out, "vider");
+      const main = JSON.parse(
+        await readFile(path.join(mainDir, "package.json"), "utf8")
+      );
+      expect(main.name).toBe("vider");
+      expect(main.version).toBe("1.2.3");
+      expect(main.optionalDependencies).toEqual(
+        Object.fromEntries(
+          Object.values(PLATFORM_PACKAGES).map((name) => [name, "1.2.3"])
+        )
+      );
+
+      for (const [platform, name] of Object.entries(PLATFORM_PACKAGES)) {
+        const dir = path.join(out, ...name.split("/"));
+        const manifest = JSON.parse(
+          await readFile(path.join(dir, "package.json"), "utf8")
+        );
+        const [npmOs, npmCpu] = platform.split("-");
+        expect(manifest.name).toBe(name);
+        expect(manifest.version).toBe("1.2.3");
+        expect(manifest.os).toEqual([npmOs]);
+        expect(manifest.cpu).toEqual([npmCpu]);
+      }
+
+      const mode = (
+        await stat(path.join(out, "@vider-app", "linux-x64", "vider"))
+      ).mode;
+      expect(mode & 0o111).not.toBe(0);
+
+      const packed = await run("npm", ["pack", "--dry-run", "--json"], {
+        cwd: mainDir,
+        env: { ...process.env, npm_config_cache: path.join(tmp, "npm-cache") },
+      });
+      const [{ files }] = JSON.parse(packed.stdout);
+      expect(files.map((file) => file.path).sort()).toEqual([
+        "README.md",
+        "bin.js",
+        "package.json",
+        "resolve.js",
+      ]);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
   });
 });
 
