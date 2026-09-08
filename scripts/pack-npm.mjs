@@ -29,7 +29,9 @@ await Promise.all([
   ),
 ]);
 
-console.log(`generated vider ${version} and ${TARGETS.length} platform packages`);
+console.log(
+  `generated @vider-app/cli ${version} and ${TARGETS.length} platform packages`
+);
 for (const target of TARGETS) {
   console.log(`  ${packageName(target)}@${version}`);
 }

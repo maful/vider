@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// npx vider → this shim → the prebuilt Go binary for the running platform.
+// npx @vider-app/cli → this shim → the prebuilt Go binary for the running platform.
 // The TUI needs the real TTY, so stdout is inherited, never piped.
 
 const { spawn } = require("node:child_process");
@@ -14,7 +14,9 @@ function fail(message, exitCode = 1) {
 
 function main() {
   if (!process.stdout.isTTY) {
-    fail("vider needs an interactive terminal. Run it in a terminal, e.g.: npx vider");
+    fail(
+      "vider needs an interactive terminal. Run it in a terminal, for example: npx @vider-app/cli"
+    );
     return;
   }
 

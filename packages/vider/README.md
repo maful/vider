@@ -1,25 +1,34 @@
-# vider
+# @vider-app/cli
 
 Vider (French for "empty") finds the `node_modules` directories on your disk and deletes the ones you select, to free up space.
 
 ## Usage
 
 ```sh
-npx vider
+npx @vider-app/cli
 ```
 
-No install needed. The first run downloads the engine for your platform (macOS Apple Silicon and Intel, Linux x64 and ARM64, Windows x64); afterwards it starts instantly.
+No installation is necessary. The first run downloads the engine for your platform. Later runs start it immediately.
+
+Vider supports macOS on Apple Silicon and Intel, Linux x64 and ARM64, and Windows x64.
+
+To install the `vider` command globally, run:
+
+```sh
+npm install --global @vider-app/cli
+vider
+```
 
 By default, the app scans your home directory, common project directories, and the current directory. You can give other directories on the command line:
 
 ```sh
-npx vider ~/Repositories
+npx @vider-app/cli ~/Repositories
 ```
 
 You can also set the `VIDER_ROOTS` variable. Separate the directories with `:`:
 
 ```sh
-VIDER_ROOTS=~/code:~/work npx vider
+VIDER_ROOTS=~/code:~/work npx @vider-app/cli
 ```
 
 ## Keys

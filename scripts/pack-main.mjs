@@ -13,7 +13,7 @@ import {
 export async function packMain({ version, source, out }) {
   validateVersion(version);
 
-  const dir = path.join(out, "vider");
+  const dir = path.join(out, "cli");
   await mkdir(dir, { recursive: true });
   for (const file of ["bin.js", "resolve.js", "README.md"]) {
     await copyFile(path.join(source, file), path.join(dir, file));
@@ -24,7 +24,7 @@ export async function packMain({ version, source, out }) {
     TARGETS.map((target) => [packageName(target), version])
   );
   const manifest = {
-    name: "vider",
+    name: "@vider-app/cli",
     version,
     description:
       "Find and delete node_modules directories to free up disk space.",

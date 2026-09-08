@@ -1,26 +1,41 @@
 # Vider
 
-Vider (French word for "empty") is a tool that aims to finds the `node_modules` directories on your disk and deletes the ones you select, to free up space.
+Vider means "empty" in French. Vider finds `node_modules` directories and deletes the directories that you select.
 
-## Usage
+## Run with npm
 
-Build the app and start it:
+Use Node.js 20 or later. Run Vider without an installation:
 
 ```sh
-go build -o vider .
-./vider
+npx @vider-app/cli
 ```
 
 By default, the app scans your home directory, common project directories, and the current directory. You can give other directories on the command line:
 
 ```sh
-./vider ~/Repositories
+npx @vider-app/cli ~/Repositories
 ```
 
 You can also set the `VIDER_ROOTS` variable. Separate the directories with `:`:
 
 ```sh
-VIDER_ROOTS=~/code:~/work ./vider
+VIDER_ROOTS=~/code:~/work npx @vider-app/cli
+```
+
+To install the command globally, run:
+
+```sh
+npm install --global @vider-app/cli
+vider
+```
+
+## Build from source
+
+Build the Go app and run it:
+
+```sh
+go build -o vider .
+./vider
 ```
 
 ## Keys

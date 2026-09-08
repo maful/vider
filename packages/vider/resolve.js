@@ -47,7 +47,7 @@ function resolveBinary({ platform, arch, env = {}, load = require }) {
     if (err && err.code === "MODULE_NOT_FOUND") {
       throw new ViderError(
         `vider is missing its binary package "${pkg}".\n` +
-          "Reinstall vider (npm install -g vider, or npx -y vider@latest)."
+          "Reinstall Vider (npm install -g @vider-app/cli, or npx -y @vider-app/cli@latest)."
       );
     }
     throw err;

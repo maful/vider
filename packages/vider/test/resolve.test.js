@@ -151,12 +151,14 @@ describe("generated npm packages", () => {
         { cwd: repoRoot }
       );
 
-      const mainDir = path.join(out, "vider");
+      const mainDir = path.join(out, "cli");
       const main = JSON.parse(
         await readFile(path.join(mainDir, "package.json"), "utf8")
       );
-      expect(main.name).toBe("vider");
+      expect(main.name).toBe("@vider-app/cli");
       expect(main.version).toBe("1.2.3");
+      expect(main.bin).toEqual({ vider: "bin.js" });
+      expect(main.publishConfig).toEqual({ access: "public" });
       expect(main.optionalDependencies).toEqual(
         Object.fromEntries(
           Object.values(PLATFORM_PACKAGES).map((name) => [name, "1.2.3"])
