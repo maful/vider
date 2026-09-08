@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/maful/vider/compare/v0.1.0...v0.1.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* publish generated npm packages from local paths ([3bdf9b5](https://github.com/maful/vider/commit/3bdf9b5ada3e11613635f5a942025ab246710be2))
+
 ## 0.1.0 (2026-09-08)
 
 
