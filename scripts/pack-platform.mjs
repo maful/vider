@@ -35,7 +35,10 @@ export async function packPlatform({ target, version, bin, out }) {
     version,
     description: `Prebuilt vider engine for ${name}. Do not install directly; install vider instead.`,
     license: "MIT",
-    repository: "github:maful/vider",
+    repository: {
+      type: "git",
+      url: "git+https://github.com/maful/vider.git",
+    },
     os: [target.npmOs],
     cpu: [target.npmCpu],
     main: "index.js",

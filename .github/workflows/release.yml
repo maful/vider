@@ -144,7 +144,7 @@ jobs:
         run: |
           set -euo pipefail
           for dir in npm-dist/@vider-app/*/ npm-dist/vider/; do
-            npm pack "$dir" --dry-run
+            npm pack "./${dir%/}" --dry-run
           done
 
       - name: Publish platform packages, then the main package
@@ -152,14 +152,14 @@ jobs:
           set -euo pipefail
 
           publish_if_missing() {
-            dir="$1"
+            dir="${1%/}"
             name="$(node -p "require('./$dir/package.json').name")"
             version="$(node -p "require('./$dir/package.json').version")"
             if npm view "$name@$version" version >/dev/null 2>&1; then
               echo "$name@$version is already published"
               return
             fi
-            npm publish "$dir" --access public --provenance
+            npm publish "./$dir" --access public --provenance
           }
 
           for dir in npm-dist/@vider-app/*/; do

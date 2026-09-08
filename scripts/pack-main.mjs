@@ -29,7 +29,10 @@ export async function packMain({ version, source, out }) {
     description:
       "Find and delete node_modules directories to free up disk space.",
     license: "MIT",
-    repository: "github:maful/vider",
+    repository: {
+      type: "git",
+      url: "git+https://github.com/maful/vider.git",
+    },
     bin: { vider: "bin.js" },
     files: ["bin.js", "resolve.js", "README.md"],
     engines: { node: ">=20" },
