@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -68,6 +70,114 @@ func TestDeleteDirs(t *testing.T) {
 		}
 		if _, err := os.Stat(r.path); !os.IsNotExist(err) {
 			t.Errorf("%s still exists", r.path)
+		}
+	}
+}
+
+// waitIdle blocks until the scanner has no walkers and no size jobs left.
+func waitIdle(t *testing.T, s *scanner) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for s.walkers.Load() != 0 || s.pending.Load() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("scanner did not go idle: walkers=%d pending=%d", s.walkers.Load(), s.pending.Load())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func scanTree(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	for _, proj := range []string{"a", "b", "c"} {
+		nm := filepath.Join(root, proj, "node_modules", "pkg")
+		if err := os.MkdirAll(nm, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(nm, "x.js"), make([]byte, 4096), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+func TestScanDoneNamesItsScanner(t *testing.T) {
+	s := newScanner([]string{scanTree(t)})
+	msg, ok := s.scan()().(scanDoneMsg)
+	if !ok || msg.scanner != s {
+		t.Fatalf("got %#v, want a scanDoneMsg for this scanner", msg)
+	}
+	if n := len(s.sortedDirs()); n != 3 {
+		t.Errorf("found %d dirs, want 3", n)
+	}
+}
+
+func TestCancelledScanStopsWalking(t *testing.T) {
+	s := newScanner([]string{scanTree(t)})
+	s.cancel()
+	s.cancel() // a second call is harmless
+	cmd := s.scan()
+	waitIdle(t, s)
+	if n := len(s.sortedDirs()); n != 0 {
+		t.Errorf("cancelled scan still found %d dirs", n)
+	}
+	if msg := cmd(); msg != nil {
+		t.Errorf("cancelled scan emitted %#v, want nothing", msg)
+	}
+}
+
+// A size job that is queued or running when the scan is cancelled must still
+// release its pending count, and must not record a partial size.
+func TestCancelDropsSizeJobs(t *testing.T) {
+	root := scanTree(t)
+	s := newScanner([]string{root})
+	for i := 0; i < cap(s.sem); i++ {
+		s.sem <- struct{}{} // every size worker is busy
+	}
+	path := filepath.Join(root, "a", "node_modules")
+	s.discover(path)
+	if s.pending.Load() != 1 {
+		t.Fatalf("pending=%d, want 1 while the job waits for a worker", s.pending.Load())
+	}
+	s.cancel()
+	waitIdle(t, s)
+	if s.sized.Load() != 0 || s.sortedDirs()[0].Size != 0 {
+		t.Errorf("cancelled job recorded a size: sized=%d size=%d", s.sized.Load(), s.sortedDirs()[0].Size)
+	}
+}
+
+func TestDirSizeStopsWhenCancelled(t *testing.T) {
+	root := scanTree(t)
+	path := filepath.Join(root, "a", "node_modules")
+	if size, _ := dirSize(context.Background(), path); size != 4096 {
+		t.Fatalf("size=%d, want 4096", size)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if size, _ := dirSize(ctx, path); size != 0 {
+		t.Errorf("size=%d after cancel, want 0", size)
+	}
+}
+
+// Rows of equal size used to swap places on every tick: the map iterates in a
+// random order and the sort compared sizes only.
+func TestSortedDirsOrderIsStable(t *testing.T) {
+	s := newScanner(nil)
+	s.dirs["/big/node_modules"] = &NodeModules{Path: "/big/node_modules", Size: 900}
+	for _, p := range []string{"/d/node_modules", "/b/node_modules", "/a/node_modules", "/c/node_modules"} {
+		s.dirs[p] = &NodeModules{Path: p, Size: 500} // four copies of one project
+	}
+	s.dirs["/new/node_modules"] = &NodeModules{Path: "/new/node_modules"} // not sized yet
+
+	want := []string{
+		"/big/node_modules",
+		"/a/node_modules", "/b/node_modules", "/c/node_modules", "/d/node_modules",
+		"/new/node_modules",
+	}
+	for i := 0; i < 50; i++ {
+		got := paths(s.sortedDirs())
+		if !slices.Equal(got, want) {
+			t.Fatalf("call %d: order %v, want %v", i, got, want)
 		}
 	}
 }

@@ -33,11 +33,24 @@ function main() {
   }
 
   const child = spawn(binPath, process.argv.slice(2), { stdio: "inherit" });
+  // The child is either starting, running, or it failed to start. A binary
+  // that cannot start fires "error" and then "close" with a negative errno
+  // as its code, so only a child that did start may set the exit code from
+  // "close". An "error" after the start (a signal that could not be
+  // delivered, for example) does not end the child: "close" still reports it.
+  let started = false;
+  child.on("spawn", () => {
+    started = true;
+  });
   child.on("error", (err) => {
-    fail(`vider: failed to start ${binPath}: ${err.message}`);
+    if (!started) {
+      fail(`vider: failed to start ${binPath}: ${err.message}`);
+    }
   });
   child.on("close", (code, signal) => {
-    process.exitCode = code ?? (signal ? 1 : 0);
+    if (started) {
+      process.exitCode = code ?? (signal ? 1 : 0);
+    }
   });
   for (const sig of ["SIGINT", "SIGTERM"]) {
     process.on(sig, () => child.kill(sig));

@@ -39,6 +39,23 @@ type tickMsg struct{}
 
 // ---------- model ----------
 
+// mode says what the keyboard does right now. Every key is routed through it
+// in handleKey, so a key can only act in the modes that list it.
+//
+// Scanning is not a mode: it runs alongside all three and is tracked by
+// scanDone.
+//
+//	browse  --d/enter (something selected)--> confirm
+//	confirm --y--> delete      confirm --n/esc--> browse
+//	delete  --deletedMsg--> browse
+type mode int
+
+const (
+	modeBrowse  mode = iota // move, select, rescan, open the prompt
+	modeConfirm             // y/n prompt about model.pending
+	modeDelete              // deleteDirs is running on model.pending
+)
+
 type model struct {
 	scanner     *scanner
 	spinner     spinner.Model
@@ -47,9 +64,8 @@ type model struct {
 	dirs        []*NodeModules
 	selected    map[string]bool
 	scanDone    bool
-	confirming  bool
-	deleting    []string
-	deleted     []delResult
+	mode        mode
+	pending     []string // set on entering modeConfirm, cleared on returning to modeBrowse
 	err         error
 	roots       []string
 	rootsLabel  string
@@ -87,69 +103,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-			m.clampScroll()
-		case "down", "j":
-			if m.cursor < len(m.dirs)-1 {
-				m.cursor++
-			}
-			m.clampScroll()
-		case "g", "home":
-			m.cursor = 0
-			m.clampScroll()
-		case "G", "end":
-			m.cursor = len(m.dirs) - 1
-			m.clampScroll()
-		case " ", "space":
-			if m.cursor < len(m.dirs) {
-				p := m.dirs[m.cursor].Path
-				m.selected[p] = !m.selected[p]
-			}
-		case "a":
-			all := len(m.dirs) > 0
-			for _, d := range m.dirs {
-				if !m.selected[d.Path] {
-					all = false
-					break
-				}
-			}
-			for _, d := range m.dirs {
-				m.selected[d.Path] = !all
-			}
-		case "r":
-			m = m.rescan()
-			cmds = append(cmds, m.scanner.scan(), m.spinner.Tick)
-		case "d", "enter":
-			var paths []string
-			for _, d := range m.dirs {
-				if m.selected[d.Path] {
-					paths = append(paths, d.Path)
-				}
-			}
-			if len(paths) > 0 && !m.confirming {
-				m.confirming = true
-			}
-		case "y":
-			if m.confirming {
-				m.confirming = false
-				var paths []string
-				for _, d := range m.dirs {
-					if m.selected[d.Path] {
-						paths = append(paths, d.Path)
-					}
-				}
-				m.deleting = paths
-				cmds = append(cmds, deleteDirs(paths))
-			}
-		case "n", "esc":
-			m.confirming = false
-		}
+		return m.handleKey(msg.String())
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -158,38 +112,164 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshDirs()
 		cmds = append(cmds, tickEvery())
 	case scanDoneMsg:
-		m.scanDone = true
-		m.scanElapsed = time.Since(m.startTime)
-		m.refreshDirs()
-	case deletedMsg:
-		m.deleted = append(m.deleted, []delResult(msg)...)
-		done := make(map[string]bool)
-		for _, d := range m.dirs {
-			done[d.Path] = true
+		// a rescan replaces the scanner; the old one's message can still be
+		// in flight, and it says nothing about the scan on screen
+		if msg.scanner == m.scanner {
+			m.scanDone = true
+			m.scanElapsed = time.Since(m.startTime)
+			m.refreshDirs()
 		}
+	case deletedMsg:
+		var failed []delResult
 		for _, r := range []delResult(msg) {
 			delete(m.selected, r.path)
 			if r.err == nil {
-				delete(done, r.path)
+				// drop it from the scanner too, or the next tick's
+				// refreshDirs puts the row back
+				m.scanner.remove(r.path)
 			} else {
-				m.err = fmt.Errorf("%s: %v", r.path, r.err)
+				failed = append(failed, r)
 			}
 		}
-		// rebuild list without deleted dirs
-		m.dirs = nil
-		for _, d := range m.scanner.sortedDirs() {
-			if done[d.Path] {
-				m.dirs = append(m.dirs, d)
-			}
-		}
-		m.deleting = nil
+		m.err = deleteError(failed)
+		m.pending = nil
+		m.mode = modeBrowse
 		m.cursor = 0
-		m.clampScroll()
+		m.refreshDirs()
 	}
 	return m, tea.Batch(cmds...)
 }
 
+// handleKey routes a key to the current mode. Quit works in every mode.
+func (m model) handleKey(key string) (tea.Model, tea.Cmd) {
+	if key == "ctrl+c" || key == "q" {
+		return m, tea.Quit
+	}
+	switch m.mode {
+	case modeConfirm:
+		return m.confirmKey(key)
+	case modeDelete:
+		// the rows in m.pending are going away: look, but do not touch
+		m.moveKey(key)
+		return m, nil
+	default:
+		return m.browseKey(key)
+	}
+}
+
+// moveKey handles the cursor keys and reports whether key was one of them.
+func (m *model) moveKey(key string) bool {
+	switch key {
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < len(m.dirs)-1 {
+			m.cursor++
+		}
+	case "g", "home":
+		m.cursor = 0
+	case "G", "end":
+		if len(m.dirs) > 0 {
+			m.cursor = len(m.dirs) - 1
+		}
+	default:
+		return false
+	}
+	m.clampScroll()
+	return true
+}
+
+func (m model) browseKey(key string) (tea.Model, tea.Cmd) {
+	if m.moveKey(key) {
+		return m, nil
+	}
+	switch key {
+	case " ", "space":
+		if m.cursor < len(m.dirs) {
+			p := m.dirs[m.cursor].Path
+			m.selected[p] = !m.selected[p]
+		}
+	case "a":
+		all := len(m.dirs) > 0
+		for _, d := range m.dirs {
+			if !m.selected[d.Path] {
+				all = false
+				break
+			}
+		}
+		for _, d := range m.dirs {
+			m.selected[d.Path] = !all
+		}
+	case "r":
+		m = m.rescan()
+		return m, tea.Batch(m.scanner.scan(), m.spinner.Tick)
+	case "d", "enter":
+		if paths := m.selectedPaths(); len(paths) > 0 {
+			m.pending = paths
+			m.mode = modeConfirm
+		}
+	}
+	return m, nil
+}
+
+// confirmKey answers the prompt. Every other key is ignored, so the set of
+// paths the prompt showed is exactly the set that y deletes.
+func (m model) confirmKey(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "y":
+		m.mode = modeDelete
+		m.err = nil // a new attempt replaces the last attempt's error
+		return m, deleteDirs(m.pending)
+	case "n", "esc":
+		m.pending = nil
+		m.mode = modeBrowse
+	}
+	return m, nil
+}
+
+// selectedPaths returns the selected rows in list order.
+func (m model) selectedPaths() []string {
+	var paths []string
+	for _, d := range m.dirs {
+		if m.selected[d.Path] {
+			paths = append(paths, d.Path)
+		}
+	}
+	return paths
+}
+
+// sizeOf sums the current sizes of the given paths.
+func (m model) sizeOf(paths []string) int64 {
+	want := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		want[p] = true
+	}
+	var total int64
+	for _, d := range m.dirs {
+		if want[d.Path] {
+			total += d.Size
+		}
+	}
+	return total
+}
+
+// deleteError folds the failed deletes into one line for the error banner.
+func deleteError(failed []delResult) error {
+	switch len(failed) {
+	case 0:
+		return nil
+	case 1:
+		return fmt.Errorf("%s: %v", failed[0].path, failed[0].err)
+	default:
+		return fmt.Errorf("%d directories were not deleted, first: %s: %v",
+			len(failed), failed[0].path, failed[0].err)
+	}
+}
+
 func (m model) rescan() model {
+	m.scanner.cancel() // or every r adds another full scan of the same roots
 	nm := initialModel(m.roots, m.rootsLabel)
 	nm.width, nm.height = m.width, m.height
 	return nm
@@ -209,6 +289,14 @@ func (m *model) refreshDirs() {
 const rowHeight = 5 // per-dir block height in the UI
 
 func (m *model) clampScroll() {
+	// View indexes m.dirs from offset, so neither value may go negative,
+	// whatever the caller did to the cursor.
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
 	if m.height == 0 {
 		return
 	}
@@ -289,7 +377,7 @@ func (m model) View() string {
 	for i := m.offset; i < end; i++ {
 		d := m.dirs[i]
 		cursor := "  "
-		if i == m.cursor && !m.confirming {
+		if i == m.cursor && m.mode != modeConfirm {
 			cursor = selectedStyle.Render("→ ")
 		}
 		check := "[ ]"
@@ -297,7 +385,7 @@ func (m model) View() string {
 			check = checkedStyle.Render("[x]")
 		}
 		rowStyle := lipgloss.NewStyle()
-		if i == m.cursor && !m.confirming {
+		if i == m.cursor && m.mode != modeConfirm {
 			rowStyle = rowStyle.Background(lipgloss.Color("236"))
 		}
 		line := rowStyle.Render(fmt.Sprintf("%s%-6s %s %-17s %s",
@@ -319,12 +407,13 @@ func (m model) View() string {
 	b.WriteString(footer)
 	b.WriteString("\n")
 
-	if m.confirming {
+	switch m.mode {
+	case modeConfirm:
 		b.WriteString(errStyle.Render(fmt.Sprintf("\n⚠  Delete %d director%s (%s)? This cannot be undone. [y]es / [n]o",
-			nSel, plural(nSel), mb(totalSel))))
-	}
-	if len(m.deleting) > 0 {
-		b.WriteString(statusStyle.Render(fmt.Sprintf("\n%s deleting %d directories…", m.spinner.View(), len(m.deleting))))
+			len(m.pending), plural(len(m.pending)), mb(m.sizeOf(m.pending)))))
+	case modeDelete:
+		b.WriteString(statusStyle.Render(fmt.Sprintf("\n%s deleting %d director%s…",
+			m.spinner.View(), len(m.pending), plural(len(m.pending)))))
 	}
 	if m.err != nil {
 		b.WriteString("\n")
@@ -332,8 +421,20 @@ func (m model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("↑/↓ move · space select · a toggle all · d delete selected · r rescan · q quit"))
+	b.WriteString(helpStyle.Render(m.helpText()))
 	return b.String()
+}
+
+// helpText lists only the keys that act in the current mode.
+func (m model) helpText() string {
+	switch m.mode {
+	case modeConfirm:
+		return "y delete · n cancel · q quit"
+	case modeDelete:
+		return "↑/↓ move · q quit"
+	default:
+		return "↑/↓ move · space select · a toggle all · d delete selected · r rescan · q quit"
+	}
 }
 
 func plural(n int) string {
