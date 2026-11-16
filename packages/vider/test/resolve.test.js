@@ -205,6 +205,30 @@ describe("bin.js", () => {
       run("node", [path.join(here, "..", "bin.js")])
     ).rejects.toMatchObject({ code: 1 });
   }, 15_000);
+
+  // Node reports a binary that cannot start with "error" and then "close"
+  // carrying a negative errno; the shim used to exit with that (254 for
+  // ENOENT) instead of 1.
+  it.runIf(hasExpect)(
+    "exits 1 when the binary cannot start",
+    async () => {
+      const script =
+        "spawn node $env(VIDER_SHIM)\n" +
+        "expect eof\n" +
+        "catch wait result\n" +
+        "exit [lindex $result 3]";
+      const res = await run("expect", ["-c", script], {
+        env: {
+          ...process.env,
+          VIDER_SHIM: path.join(here, "..", "bin.js"),
+          VIDER_BIN: "/nonexistent/vider-bin",
+        },
+      }).catch((err) => err);
+      expect(String(res.stdout)).toContain("failed to start");
+      expect(res.code).toBe(1);
+    },
+    30_000
+  );
 });
 
 describe("end-to-end with a real binary", () => {
