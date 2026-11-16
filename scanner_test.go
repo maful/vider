@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -155,5 +156,28 @@ func TestDirSizeStopsWhenCancelled(t *testing.T) {
 	cancel()
 	if size, _ := dirSize(ctx, path); size != 0 {
 		t.Errorf("size=%d after cancel, want 0", size)
+	}
+}
+
+// Rows of equal size used to swap places on every tick: the map iterates in a
+// random order and the sort compared sizes only.
+func TestSortedDirsOrderIsStable(t *testing.T) {
+	s := newScanner(nil)
+	s.dirs["/big/node_modules"] = &NodeModules{Path: "/big/node_modules", Size: 900}
+	for _, p := range []string{"/d/node_modules", "/b/node_modules", "/a/node_modules", "/c/node_modules"} {
+		s.dirs[p] = &NodeModules{Path: p, Size: 500} // four copies of one project
+	}
+	s.dirs["/new/node_modules"] = &NodeModules{Path: "/new/node_modules"} // not sized yet
+
+	want := []string{
+		"/big/node_modules",
+		"/a/node_modules", "/b/node_modules", "/c/node_modules", "/d/node_modules",
+		"/new/node_modules",
+	}
+	for i := 0; i < 50; i++ {
+		got := paths(s.sortedDirs())
+		if !slices.Equal(got, want) {
+			t.Fatalf("call %d: order %v, want %v", i, got, want)
+		}
 	}
 }

@@ -231,6 +231,9 @@ func (s *scanner) remove(paths ...string) {
 }
 
 // sortedDirs returns dirs ordered by size (largest first); unsized ones last.
+// Dirs of equal size are ordered by path: the map iterates in a random order
+// and the UI calls this on every tick, so without the tie-break equal rows
+// would trade places forever.
 func (s *scanner) sortedDirs() []*NodeModules {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -239,7 +242,10 @@ func (s *scanner) sortedDirs() []*NodeModules {
 		out = append(out, nm)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		return out[i].Size > out[j].Size
+		if out[i].Size != out[j].Size {
+			return out[i].Size > out[j].Size
+		}
+		return out[i].Path < out[j].Path
 	})
 	return out
 }
