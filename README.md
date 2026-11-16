@@ -49,6 +49,8 @@ go build -o vider .
 | `r` | Scan again |
 | `q` or `ctrl+c` | Close the app |
 
+While the app asks for `y` / `n`, only `y`, `n`, `esc`, and the keys that close the app work. While the app deletes directories, you can only move the cursor or close the app.
+
 > CAUTION: The app deletes the directories that you select. You cannot get them back.
 
 ## Why it is fast
