@@ -46,7 +46,7 @@ go build -o vider .
 | `space` | Select one directory, or unselect it |
 | `a` | Select all directories, or unselect all |
 | `d` or `enter` | Delete the selected directories (the app asks for `y` / `n`) |
-| `r` | Scan again |
+| `r` | Scan again. A scan that is in progress stops first. |
 | `q` or `ctrl+c` | Close the app |
 
 While the app asks for `y` / `n`, only `y`, `n`, `esc`, and the keys that close the app work. While the app deletes directories, you can only move the cursor or close the app.

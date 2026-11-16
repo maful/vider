@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -21,11 +22,21 @@ type NodeModules struct {
 	ModTime time.Time
 }
 
-// scanDoneMsg is emitted when scanning finishes.
-type scanDoneMsg struct{}
+// scanDoneMsg is emitted when scanning finishes. It names its scanner, so a
+// message from a scan that was replaced by a rescan can be told apart from the
+// current one.
+type scanDoneMsg struct{ scanner *scanner }
 
+// A scanner runs one scan and is not reused: a rescan cancels it and makes a
+// new one.
+//
+//	new --start--> running --walkers and size jobs drain--> done
+//	                  \--cancel--> cancelled
 type scanner struct {
 	roots []string
+
+	ctx  context.Context // done once the scan is cancelled
+	stop context.CancelFunc
 
 	walkers atomic.Int64 // in-flight walk goroutines
 	pending atomic.Int64 // size jobs not yet finished
@@ -38,12 +49,22 @@ type scanner struct {
 }
 
 func newScanner(roots []string) *scanner {
+	ctx, stop := context.WithCancel(context.Background())
 	s := &scanner{
 		roots: roots,
+		ctx:   ctx,
+		stop:  stop,
 		sem:   make(chan struct{}, workers()),
 		dirs:  map[string]*NodeModules{},
 	}
 	return s
+}
+
+// cancel abandons the scan: walkers stop at their next directory, queued size
+// jobs are dropped, running ones stop early and discard their result, and no
+// scanDoneMsg is sent. Calling it more than once is fine.
+func (s *scanner) cancel() {
+	s.stop()
 }
 
 func workers() int {
@@ -68,13 +89,17 @@ var skipDirs = map[string]bool{
 
 // scan starts the walk/sizing pipeline and returns a tea.Cmd that emits
 // scanDoneMsg once every walker has finished and all discovered dirs are sized.
+// A cancelled scan emits nothing.
 func (s *scanner) scan() tea.Cmd {
 	s.start()
 	return func() tea.Msg {
 		for {
 			time.Sleep(25 * time.Millisecond)
+			if s.ctx.Err() != nil {
+				return nil
+			}
 			if s.walkers.Load() == 0 && s.pending.Load() == 0 {
-				return scanDoneMsg{}
+				return scanDoneMsg{s}
 			}
 		}
 	}
@@ -95,6 +120,9 @@ func (s *scanner) start() {
 func (s *scanner) walk(root string) {
 	defer s.walkers.Add(-1)
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if s.ctx.Err() != nil {
+			return fs.SkipAll
+		}
 		if err != nil || d == nil {
 			return nil // skip unreadable entries
 		}
@@ -120,9 +148,17 @@ func (s *scanner) discover(path string) {
 	s.mu.Unlock()
 
 	go func() {
-		s.sem <- struct{}{}
+		defer s.pending.Add(-1)
+		select {
+		case s.sem <- struct{}{}:
+		case <-s.ctx.Done():
+			return
+		}
 		defer func() { <-s.sem }()
-		size, mt := dirSize(path)
+		size, mt := dirSize(s.ctx, path)
+		if s.ctx.Err() != nil {
+			return // the walk stopped early, so size is only a part of the total
+		}
 		s.mu.Lock()
 		if nm, ok := s.dirs[path]; ok {
 			nm.Size = size
@@ -130,13 +166,13 @@ func (s *scanner) discover(path string) {
 		}
 		s.mu.Unlock()
 		s.sized.Add(1)
-		s.pending.Add(-1)
 	}()
 }
 
 // dirSize sums file sizes under path, walking in parallel for speed on
-// wide trees: subdirectories are handed off to the same bounded pool.
-func dirSize(path string) (int64, time.Time) {
+// wide trees: subdirectories are handed off to the same bounded pool. When ctx
+// is cancelled the walk stops early and the result is incomplete.
+func dirSize(ctx context.Context, path string) (int64, time.Time) {
 	var total int64
 	var newest time.Time
 	var mu sync.Mutex
@@ -144,6 +180,9 @@ func dirSize(path string) (int64, time.Time) {
 	var wg sync.WaitGroup
 	var walk func(dir string)
 	walk = func(dir string) {
+		if ctx.Err() != nil {
+			return
+		}
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return

@@ -291,3 +291,32 @@ func TestDeleteErrorLifecycle(t *testing.T) {
 		t.Fatalf("err=%v rows=%v, want no error and an empty list", m.err, paths(m.dirs))
 	}
 }
+
+// ---------- scan generations ----------
+
+// Pressing r mid-scan used to leave the old scan running, and its
+// scanDoneMsg marked the new scan as finished.
+func TestRescanCancelsOldScanAndIgnoresItsDone(t *testing.T) {
+	m := initialModel(nil, "")
+	old := m.scanner
+
+	m = update(t, m, runeKey('r'))
+	if m.scanner == old {
+		t.Fatal("r did not start a new scanner")
+	}
+	if old.ctx.Err() == nil {
+		t.Error("r did not cancel the old scanner")
+	}
+	if m.scanner.ctx.Err() != nil {
+		t.Error("the new scanner is cancelled")
+	}
+
+	m = update(t, m, scanDoneMsg{old})
+	if m.scanDone {
+		t.Fatal("the old scanner's scanDoneMsg finished the new scan")
+	}
+	m = update(t, m, scanDoneMsg{m.scanner})
+	if !m.scanDone {
+		t.Fatal("the current scanner's scanDoneMsg was ignored")
+	}
+}

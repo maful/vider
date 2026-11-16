@@ -112,9 +112,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshDirs()
 		cmds = append(cmds, tickEvery())
 	case scanDoneMsg:
-		m.scanDone = true
-		m.scanElapsed = time.Since(m.startTime)
-		m.refreshDirs()
+		// a rescan replaces the scanner; the old one's message can still be
+		// in flight, and it says nothing about the scan on screen
+		if msg.scanner == m.scanner {
+			m.scanDone = true
+			m.scanElapsed = time.Since(m.startTime)
+			m.refreshDirs()
+		}
 	case deletedMsg:
 		var failed []delResult
 		for _, r := range []delResult(msg) {
@@ -265,6 +269,7 @@ func deleteError(failed []delResult) error {
 }
 
 func (m model) rescan() model {
+	m.scanner.cancel() // or every r adds another full scan of the same roots
 	nm := initialModel(m.roots, m.rootsLabel)
 	nm.width, nm.height = m.width, m.height
 	return nm
