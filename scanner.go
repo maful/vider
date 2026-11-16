@@ -181,6 +181,16 @@ func dirSize(path string) (int64, time.Time) {
 // s_sizeSem bounds the parallel size walk; sized to workers().
 var s_sizeSem = make(chan struct{}, workers())
 
+// remove forgets dirs that are gone from disk, so sortedDirs stops returning
+// them. A size job still running for a removed path drops its result.
+func (s *scanner) remove(paths ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, p := range paths {
+		delete(s.dirs, p)
+	}
+}
+
 // sortedDirs returns dirs ordered by size (largest first); unsized ones last.
 func (s *scanner) sortedDirs() []*NodeModules {
 	s.mu.Lock()

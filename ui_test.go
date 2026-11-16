@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -58,4 +59,52 @@ func TestJumpToEndMovesToLastRow(t *testing.T) {
 		t.Fatalf("cursor=%d, want 2", m.cursor)
 	}
 	_ = m.View()
+}
+
+// Deleted rows used to come back on the next tick, because only the model's
+// list was filtered and the scanner still held the paths.
+func TestDeletedRowsStayGone(t *testing.T) {
+	gone1, gone2, failed := "/a/node_modules", "/b/node_modules", "/c/node_modules"
+	m := initialModel(nil, "")
+	m = update(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	for i, p := range []string{gone1, gone2, failed} {
+		m.scanner.dirs[p] = &NodeModules{Path: p, Size: int64(i + 1)}
+	}
+	m = update(t, m, tickMsg{})
+	m = update(t, m, runeKey('a'))
+
+	m = update(t, m, deletedMsg{
+		{path: gone1},
+		{path: gone2},
+		{path: failed, err: errors.New("permission denied")},
+	})
+
+	check := func(when string) {
+		t.Helper()
+		if len(m.dirs) != 1 || m.dirs[0].Path != failed {
+			t.Fatalf("%s: rows=%v, want only %s", when, paths(m.dirs), failed)
+		}
+	}
+	check("after delete")
+	m = update(t, m, tickMsg{})
+	check("after next tick")
+
+	if len(m.selected) != 0 {
+		t.Errorf("selected=%v, want empty", m.selected)
+	}
+	if m.err == nil {
+		t.Error("failed delete did not set err")
+	}
+	if m.deleting != nil {
+		t.Errorf("deleting=%v, want nil", m.deleting)
+	}
+	_ = m.View()
+}
+
+func paths(dirs []*NodeModules) []string {
+	out := make([]string, len(dirs))
+	for i, d := range dirs {
+		out[i] = d.Path
+	}
+	return out
 }

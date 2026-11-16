@@ -165,28 +165,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshDirs()
 	case deletedMsg:
 		m.deleted = append(m.deleted, []delResult(msg)...)
-		done := make(map[string]bool)
-		for _, d := range m.dirs {
-			done[d.Path] = true
-		}
 		for _, r := range []delResult(msg) {
 			delete(m.selected, r.path)
 			if r.err == nil {
-				delete(done, r.path)
+				// drop it from the scanner too, or the next tick's
+				// refreshDirs puts the row back
+				m.scanner.remove(r.path)
 			} else {
 				m.err = fmt.Errorf("%s: %v", r.path, r.err)
 			}
 		}
-		// rebuild list without deleted dirs
-		m.dirs = nil
-		for _, d := range m.scanner.sortedDirs() {
-			if done[d.Path] {
-				m.dirs = append(m.dirs, d)
-			}
-		}
 		m.deleting = nil
 		m.cursor = 0
-		m.clampScroll()
+		m.refreshDirs()
 	}
 	return m, tea.Batch(cmds...)
 }
