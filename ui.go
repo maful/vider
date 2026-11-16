@@ -104,7 +104,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor = 0
 			m.clampScroll()
 		case "G", "end":
-			m.cursor = len(m.dirs) - 1
+			if len(m.dirs) > 0 {
+				m.cursor = len(m.dirs) - 1
+			}
 			m.clampScroll()
 		case " ", "space":
 			if m.cursor < len(m.dirs) {
@@ -209,6 +211,14 @@ func (m *model) refreshDirs() {
 const rowHeight = 5 // per-dir block height in the UI
 
 func (m *model) clampScroll() {
+	// View indexes m.dirs from offset, so neither value may go negative,
+	// whatever the caller did to the cursor.
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
 	if m.height == 0 {
 		return
 	}
