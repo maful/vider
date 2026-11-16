@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/maful/vider/compare/v0.1.3...v0.1.4) (2026-11-16)
+
+
+### Bug Fixes
+
+* close the bugs caused by implicit state machines ([#15](https://github.com/maful/vider/issues/15)) ([6c2fb2a](https://github.com/maful/vider/commit/6c2fb2a82703cbfecb1bedb883499e4ba82740d1))
+
 ## [0.1.3](https://github.com/maful/vider/compare/v0.1.2...v0.1.3) (2026-09-08)
 
 
